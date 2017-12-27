@@ -35,11 +35,12 @@ class InfluxDBAgent{
     }).then((channel)=>{
         this.amqpChannel = channel;
         console.log("Channel created! ");
-        return channel.assertQueue(CONSTANT.QUEUE_NAME);
-    }).then(()=>{
-      return this.consumeMsg();
+        channel.assertExchange(CONSTANT.QUEUE_NAME, 'fanout', {durable: false});
+        return channel.assertQueue('', {exclusive: true});
+    }).then((queue)=>{
+      this.amqpChannel.bindQueue(queue.queue, CONSTANT.QUEUE_NAME, '');
+      return this.consumeMsg(queue.queue);
     });
-
   }
 
   async checkDB(){
@@ -55,14 +56,13 @@ class InfluxDBAgent{
       });
   }
 
-  async consumeMsg(){
+  async consumeMsg(queueName){
     console.log("Waiting for message");
-    return this.amqpChannel.consume(CONSTANT.QUEUE_NAME, (msg)=>{
+    return this.amqpChannel.consume(queueName, (msg)=>{
       if(msg != null){
         let content = msg.content.toString();
         let data = JSON.parse(content);
         console.log("The message received is ", data);
-
         this.writePoints(data.iot_no, data.temperature, data.machine_no, data.timestamp);
       }
     });

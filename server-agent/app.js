@@ -1,62 +1,39 @@
-const INFLUX_DB_NAME = 'iot_measurement';
-const INFLUX_MEASUREMENT = 'machine_temperature';
-const Influx = require('influx');
-
-const influx = new Influx.InfluxDB({
-  host: 'localhost',
-  database: INFLUX_DB_NAME,
-  schema: [
-    {
-      measurement: INFLUX_MEASUREMENT,
-      fields: {
-        iot_no: Influx.FieldType.INTEGER,
-        temperature: Influx.FieldType.INTEGER
-      },
-      tags: [
-        'machine'
-      ]
-    }
-  ]
-})
-
+const amqp = require('amqplib');
+const CONSTANT = require('../constant');
+const express = require('express');
+const bodyParser = require('body-parser');
 
 class ServerAgent{
   constructor(){
-    this.checkDB();
-    console.log("INFLUXDB is connected and DB exists");
+    this.connectAmqp();
   }
-
-  async checkDB(){
-    await influx.getDatabaseNames()
-      .then(names => {
-        if (!names.includes(INFLUX_DB_NAME)) {
-          return influx.createDatabase(INFLUX_DB_NAME);
-        }
-      })
-      .catch(err => {
-        console.error(`Error creating Influx database!`);
-      })
-  }
-
-  async writePoints(iot_no, temperature, machine_no){
-    await influx.writePoints([
-      {
-        measurement: INFLUX_MEASUREMENT,
-        tags: { machine: machine_no },
-        fields: { iot_no: iot_no, temperature: temperature}
-      }
-    ]).catch(err =>{
-      console.log("Error in writing points to INFLUXDB! ", err);
+  connectAmqp(){
+    return amqp.connect("amqp://localhost").then((conn)=>{
+      this.amqpConn = conn;
+      console.log("AMQP connected! ");
+      return conn.createChannel();
+    }).then((channel)=>{
+        this.amqpChannel = channel;
+        console.log("Channel created! ");
+        return channel.assertExchange(CONSTANT.QUEUE_NAME, 'fanout', {durable: false});
     });
+  }
+  publish(data){
+    this.amqpChannel.publish(CONSTANT.QUEUE_NAME, '', new Buffer(JSON.stringify(data)));
   }
 }
 
 const serverAgent = new ServerAgent();
+const app = express();
+app.use(bodyParser.json());
 
-for(let i = 0; i < 100; i ++){
-  ((j) => {
-    setTimeout(function(){
-      serverAgent.writePoints(1, j+200, 1);
-    }, j * 500);
-  })(i);
-}
+app.get('/', (req, res) => res.send());
+
+app.post('/log', (req, res) =>{
+  let data = req.body;
+  console.log("The data is", data);
+  serverAgent.publish(data);
+  res.send({status: true});
+});
+
+app.listen(3030, () => console.log('Server app listening on port 3030!'))

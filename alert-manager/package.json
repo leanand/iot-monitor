@@ -1,5 +1,5 @@
 {
-  "name": "server-agent",
+  "name": "alert-manager",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -10,8 +10,6 @@
   "license": "ISC",
   "dependencies": {
     "amqplib": "^0.5.2",
-    "body-parser": "^1.18.2",
-    "express": "^4.16.2",
-    "influx": "^5.0.7"
+    "twilio": "^3.11.0"
   }
 }
